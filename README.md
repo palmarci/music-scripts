@@ -11,5 +11,4 @@ what it does:
 i used some code from:
 
 https://github.com/noahgolmant/py-audio-analysis
-
 https://github.com/esonderegger/neg23
