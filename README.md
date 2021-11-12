@@ -2,10 +2,10 @@
 my python scripts for downloading, encoding and checking music
 
 what it does:
-- downloads a youtube playlist
+- downloads a youtube playlist with *yt-dlp*
 - extracts the encoded files with *ffmpeg*
-- checks the file for quality (bitrate + **epic cutoff frequency analyzer**)
-- then encodes it with *fdkaac* and renames it
+- checks them for quality (bitrate + **epic cutoff frequency analyzer**)
+- then encodes the files with *fdkaac* and also renames them
 
 
 i used some code from:
