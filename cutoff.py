@@ -54,7 +54,7 @@ def getCutoff(filename, minSearchHz, maxSearchHz, hzStep):
 	for i in range(minSearchHz, maxSearchHz, hzStep):
 		currentAvg = getAverageByHertzRange(10*log10(p), i - hzStep/2, i + hzStep/2, samplesPerHz)
 		averages.append([i, currentAvg])
-		print(f"{i}hz: {currentAvg}")
+		#print(f"{i}hz: {currentAvg}")
 	
 	sumOfAverages = 0 
 	for i in averages:
