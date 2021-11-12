@@ -7,6 +7,9 @@ what it does:
 - checks the file for quality (bitrate + **cutoff frequency**)
 - then encodes it with *fdkaac* and renames it
 
+
 i used some code from:
+
 https://github.com/noahgolmant/py-audio-analysis
+
 https://github.com/esonderegger/neg23
