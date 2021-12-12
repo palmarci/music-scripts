@@ -3,7 +3,7 @@ import youtube_dl
 
 
 links = {
-	"1212": "https://www.youtube.com/playlist?list=PLN_vS3zireLBr8fixcg4T8FdMotoNWRXE"
+	"demo": "https://www.youtube.com/playlist?list=EDITME"
 }
 
 mainWorkingDir = os.getcwd()
