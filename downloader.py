@@ -1,11 +1,15 @@
 import os
 import youtube_dl
 
+
 links = {
-	"debug": "https://www.youtube.com/playlist?list=PLAYLISTID"
+	"1212": "https://www.youtube.com/playlist?list=PLN_vS3zireLBr8fixcg4T8FdMotoNWRXE"
 }
 
 mainWorkingDir = os.getcwd()
+
+def normalizeFilename(name):
+	return name.replace(' - Topic', '').replace('.', '').replace("'", '').replace(':', '')
 
 for currentName in links:
 	os.chdir(mainWorkingDir)
@@ -31,7 +35,7 @@ for currentName in links:
 				print(f"{i+1}/{len(result['entries'])}: {video['title']} [{video['id']}]")
 				
 				# get output name
-				dlFileName = (video["title"] + " - " + video["uploader"]).replace(' - Topic', '').replace('.', '') + "." + video["ext"]
+				dlFileName = normalizeFilename(video["title"] + " - " + video["uploader"]) + "." + video["ext"]
 				
 				# download audio
 				dlCommand = 'yt-dlp -f bestaudio -o "' + dlFileName + '" "https://www.youtube.com/watch?v=' + video["id"] + '"'
