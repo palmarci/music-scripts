@@ -6,11 +6,14 @@ my python scripts for downloading, encoding and checking music
 - normalizer.py: extracts the encoded files with **ffmpeg**, analyzes them and also encodes them with **fdkaac** while checking them for quality info with **soxi** and the cutoff script
 - cutoff.py: epic cutoff frequency analyzer with fast fourier transform
 - plotMixBPM.py: draws the input file's BPM onto a graph
+- mixDetect.py: loops trough an audio file and uses shazam's api to recognize songs between given time values
 
 please also note that the calculations are not perfect but they are good enough for me
 
 
 i used some code from: 
+
+https://github.com/Numenorean/ShazamAPI
 
 https://github.com/noahgolmant/py-audio-analysis 
 
