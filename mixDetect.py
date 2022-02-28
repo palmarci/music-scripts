@@ -83,7 +83,7 @@ if len(sys.argv) > 1:
 				toOutput.append(i)
 
 		print("Shazam found these tracks:")
-		for i in list(dict(toOutput)):
+		for i in list(set(toOutput)):
 			print(i)
 	
 	else:
