@@ -7,7 +7,8 @@ import numpy
 import pywt
 from scipy import signal
 import sys
-
+import os
+import subprocess
 
 def formatSeconds(seconds):
     hours = seconds // (60*60)
@@ -127,6 +128,14 @@ def getBpm(samps, fs, windowSize):
 
 	return numpy.median(bpms)
 
+def convertToWav(filename):
+	print("converting to wav...")
+	originalFilename = os.path.abspath(filename)
+	workingFilePath = f'/tmp/{os.path.splitext(os.path.basename(originalFilename))[0]}.wav'
+	ffmpegCommand = f'ffmpeg -loglevel quiet -n -i "{originalFilename}" "{workingFilePath}"'
+	subprocess.call(ffmpegCommand, shell=True)
+	return workingFilePath
+
 # how many samples, sample length in seconds, window size(?), safe bpm range
 def plotBpm(filename, settings):
 
@@ -155,6 +164,13 @@ def plotBpm(filename, settings):
 	plt.grid(axis='y')
 	plt.xticks(rotation=45)
 	plt.show()
-	#print(f"finalBpm: {bpm}")
 
-plotBpm(sys.argv[1], [60, 16, 3.0, [120, 135]])
+if len(sys.argv) > 1 and os.path.exists(sys.argv[1]):
+	filePath = sys.argv[1]
+	if ".wav" not in sys.argv[1]:
+		filePath = convertToWav(sys.argv[1])
+		#print(filePath)
+	plotBpm(filePath, [60, 16, 3.0, [120, 150]])
+
+else:
+	print("usage: python plotBpm.py [filename]")
