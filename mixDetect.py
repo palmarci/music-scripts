@@ -4,6 +4,11 @@ import struct
 import wave
 import sys
 import os
+import subprocess
+
+def runCommand(command):
+	subProcess = subprocess.getoutput(command)
+	return str(subProcess)
 
 # config
 timeBetweeenSamples = 60
@@ -36,11 +41,12 @@ if len(sys.argv) > 1:
 		originalFilename = os.path.abspath(sys.argv[1])
 		workingFilePath = f'/tmp/{os.path.splitext(os.path.basename(originalFilename))[0]}.wav'
 		ffmpegCommand = f'ffmpeg -loglevel quiet -n -i "{originalFilename}" "{workingFilePath}"'
-		os.popen(ffmpegCommand)
+		runCommand(ffmpegCommand)
 
 		# read fileSeconds
 		getfileSecondsCommand = "ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 '" + workingFilePath + "'"
-		fileSeconds = round(float(os.popen(getfileSecondsCommand).readlines()[0].strip()))
+		resp = runCommand(getfileSecondsCommand)
+		fileSeconds = round(float(resp))
 		print(f"loaded '{os.path.basename(workingFilePath)}' -> {fileSeconds} s")
 		
 		# read chunks from wav
