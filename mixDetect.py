@@ -1,98 +1,157 @@
-from ShazamAPI import Shazam
-from io import BytesIO 
-import struct
+import argparse
 import wave
-import sys
 import os
+import shutil
 import subprocess
+import json
+import tempfile
 
-def runCommand(command):
-	subProcess = subprocess.getoutput(command)
-	return str(subProcess)
+class Result:
+	def __init__(self, title, segment_name):
+		self.title = title
+		self.segment_name = segment_name
 
-# config
-timeBetweeenSamples = 60
-sampleLength = 15
-minOccurance = 2
+def check_and_convert_to_wav(input_file):
+	# Check if the input file is already in WAV format
+	if input_file.lower().endswith('.wav'):
+		return input_file
 
+	# Create a temporary directory to store the converted WAV file
+	temp_dir = tempfile.mkdtemp(prefix='tmp_', dir='/tmp')
 
-# variables
-wavFrameRate = 0
-wavSampWidth = 0
-wavChannels = 0
-matches = []
+	# Generate the output WAV file path
+	output_wav_file = os.path.join(temp_dir, 'converted.wav')
 
-def signalToWavFormat(signal):
-	memoryFile = BytesIO(b"")
-	wavFile = wave.open(memoryFile, 'wb')
-	wavFile.setnchannels(wavChannels)
-	wavFile.setsampwidth(wavSampWidth)
-	wavFile.setframerate(wavFrameRate)
-	wavFile.writeframes(signal)
-	wavFile.close()
-	memoryFile.seek(0)
-	return memoryFile.read()
+	# Use FFmpeg to convert the input file to WAV format
+	print(f"converting to {output_wav_file}...")
+	command = f'ffmpeg -i "{input_file}" -hide_banner -loglevel panic "{output_wav_file}"'
+	subprocess.run(command, shell=True)
+	print("converted\n")
+	return output_wav_file
 
-if len(sys.argv) > 1:
-	if os.path.exists(sys.argv[1]):
+def get_segment_name(segment_index, segment_duration, skip_duration):
+	start_time = segment_index * (segment_duration + skip_duration)
+	minutes = int(start_time / 60)
+	seconds = int(start_time % 60)
+	return f'{minutes:02d}:{seconds:02d}'
 
-		# convert to wav
-		print("converting to wav...")
-		originalFilename = os.path.abspath(sys.argv[1])
-		workingFilePath = f'/tmp/{os.path.splitext(os.path.basename(originalFilename))[0]}.wav'
-		ffmpegCommand = f'ffmpeg -loglevel quiet -n -i "{originalFilename}" "{workingFilePath}"'
-		runCommand(ffmpegCommand)
+def process_wav_data(input_file, output_dir, segment_duration, skip_duration, occurrences):
+	# Open the input WAV file
+	with wave.open(input_file, 'rb') as wav_file:
+		# Get the parameters of the input file
+		num_channels = wav_file.getnchannels()
+		sample_width = wav_file.getsampwidth()
+		frame_rate = wav_file.getframerate()
+		total_frames = wav_file.getnframes()
 
-		# read fileSeconds
-		getfileSecondsCommand = "ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 '" + workingFilePath + "'"
-		resp = runCommand(getfileSecondsCommand)
-		fileSeconds = round(float(resp))
-		print(f"loaded '{os.path.basename(workingFilePath)}' -> {fileSeconds} s")
-		
-		# read chunks from wav
-		with wave.open(workingFilePath, "rb") as infile:
-			wavChannels = infile.getnchannels()
-			wavSampWidth = infile.getsampwidth()
-			wavFrameRate = infile.getframerate()
+		# Calculate the number of frames for the segment and skip durations
+		segment_frames = int(segment_duration * frame_rate)
+		skip_frames = int(skip_duration * frame_rate)
 
-			# loop on the chunks
-			for i in range(0, fileSeconds):
-				if i % (timeBetweeenSamples + sampleLength) == 0:
+		# Create the output directory if it doesn't exist
+		os.makedirs(output_dir, exist_ok=True)
 
-					infile.setpos(int(i * wavFrameRate))
-					data = infile.readframes(int(((i + sampleLength) - i) * wavFrameRate))
+		# Split the WAV file into segments
+		segment_count = 0
+		start_frame = 0
+		results = []
+		printed_titles = set()
 
-					# run shazam
-					shazam = Shazam(signalToWavFormat(data))
-					recognizer = shazam.recognizeSong()
-					response = list(recognizer)
+		while start_frame < total_frames:
+			# Calculate the end frame for the current segment
+			end_frame = start_frame + segment_frames
 
-					# get matches
-					track = ""
-					for r in response:
-						if "track" in r[1]:
-							artist = r[1]["track"]["subtitle"]
-							title = r[1]["track"]["title"]
-							track = f"{artist} - {title}"
-							matches.append(track)
+			# Set the position in the input file
+			wav_file.setpos(start_frame)
 
-					print(f"{i} -> {i + sampleLength} (/{fileSeconds}): {track}")
-		
-		# filter false positives
-		toOutput = []
-		for i in matches:
-			counter = 0
-			for x in matches:
-				if x == i:
-					counter += 1
-			if counter > minOccurance:
-				toOutput.append(i)
+			# Read frames for the current segment
+			frames = wav_file.readframes(segment_frames)
 
-		print("Shazam found these tracks:")
-		for i in list(set(toOutput)):
-			print(i)
-	
-	else:
-		print("file not found")
-else:
-	print("usage: python mixDetect.py [filename]")
+			# Create a new output WAV file
+			segment_name = get_segment_name(segment_count, segment_duration, skip_duration)
+			output_file = os.path.join(output_dir, f'segment_{segment_name}.wav')
+			with wave.open(output_file, 'wb') as output_wav:
+				# Set the output file parameters
+				output_wav.setnchannels(num_channels)
+				output_wav.setsampwidth(sample_width)
+				output_wav.setframerate(frame_rate)
+				output_wav.writeframes(frames)
+
+			# Run the songrec command for the segment
+			segment_filename = f'segment_{segment_name}.wav'
+			
+			# check if its a whole minute and print info
+			currentTime = segment_filename.replace('segment_', '').replace('.wav', '')
+			if ":00" in currentTime:
+				print(f'...{currentTime}')
+			
+			command = f'songrec audio-file-to-recognized-song "{output_file}"'
+			result = subprocess.check_output(command, shell=True).decode().strip()
+
+			# Process the songrec output
+			result_data = json.loads(result)
+			if "track" in result_data:
+				title = result_data["track"]["subtitle"] + ' - ' + result_data["track"]["title"]
+				result_obj = Result(title, segment_name)
+				results.append(result_obj)
+
+				if title not in printed_titles:
+					count = 0
+					for i in results:
+						if i.title == title:
+							count += 1
+					#print(count)
+					if count >= occurrences:
+						print(f'{title} @ {segment_name}')
+						printed_titles.add(title)
+
+			segment_count += 1
+			start_frame += segment_frames + skip_frames
+
+	return results
+
+def main():
+	# Create an argument parser
+	parser = argparse.ArgumentParser(description='Detects the track IDs from a DJ mix using SongRec.')
+
+	# Add the input file path argument
+	parser.add_argument('input_file', type=str, help='path to the input file')
+
+	# Add optional arguments for segment duration, skip duration, occurrences, and output directory
+	parser.add_argument('--segment-duration', type=float, default=15,
+						help='duration of each segment in seconds (default: 15)')
+	parser.add_argument('--skip-duration', type=float, default=30,
+						help='duration to skip between segments in seconds (default: 30)')
+	parser.add_argument('--occurrences', type=int, default=2,
+						help='minimum number of occurrences for a result to be printed (default: 2)')
+
+	# Parse the command-line arguments
+	args = parser.parse_args()
+
+	# Extract the input file path from the arguments
+	input_file = args.input_file
+
+	# Check if the input file exists
+	if not os.path.isfile(input_file):
+		print('The input file does not exist.')
+		return
+
+	# Convert the input file to WAV if necessary
+	input_file = check_and_convert_to_wav(input_file)
+
+	# Extract the segment duration, skip duration, and occurrences from the arguments
+	segment_duration = args.segment_duration
+	skip_duration = args.skip_duration
+	occurrences = args.occurrences
+
+	# Create a temporary directory to store the output segments
+	output_dir = tempfile.mkdtemp(prefix='output_', dir='/tmp')
+
+	# Call the process_wav_data function
+	results = process_wav_data(input_file, output_dir, segment_duration, skip_duration, occurrences)
+
+	# Delete the temporary directory
+	shutil.rmtree(output_dir)
+
+if __name__ == '__main__':
+	main()
