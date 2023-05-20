@@ -4,7 +4,7 @@ import sys
 import re
 import subprocess
 
-expectedDb = -11 # LUFS or db ????
+expectedDb = -9.5 # lufs(?)
 cuttoffHz = 20000
 codecBitrate = 256
 
@@ -62,7 +62,6 @@ def startNormalization(filePath, quality):
 
 	gainAmount = linearGain(loudnessStats['I'], expectedDb)
 	outputPath = os.path.splitext(filePath)[0]  + quality + ".m4a"
-	#filePath = os.path.splitext(fileName)[0] + ".wav"
 
 	if os.path.isfile(outputPath):
 		print("[I] Skipping file, already exists at " + outputPath)
@@ -72,27 +71,12 @@ def startNormalization(filePath, quality):
 			sys.exit(1)
 
 
-def getQuality(fileName):
-	soxiResult = runCommand('soxi "' + fileName + '"')
-	regexValue = re.findall(r'(?!Bit Rate *: )([1-9]\.[1-9][1-9])', soxiResult)
-
-	if len(regexValue) > 0:
-		bitRate = float(regexValue[0])
-		return bitRate
-	else:
-		print("[E] Could not get the wav bit rate!")
-		sys.exit(1)
-
 def main():
 	fileName = str(sys.argv[1])
 	filePathWav = os.path.splitext(fileName)[0] + ".wav"
 	runCommand('ffmpeg -i "' + fileName + '" -y -nostats -loglevel 0 "' + filePathWav + '"')
 
-	qualityString = "Q" + str((abs(getQuality(filePathWav)))).replace(".", "-")
-	print(f"{filePathWav}: {qualityString}")
-
-	#startNormalization(fileName, qualityString)
-	startNormalization(fileName, "")
+	startNormalization(fileName)
 
 	runCommand("rm '" + filePathWav + "'")
 	runCommand('rm "' + fileName + '"')
