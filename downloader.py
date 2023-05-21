@@ -4,7 +4,7 @@ import time
 import multiprocessing
 
 links = {
-	"demo": "https://music.youtube.com/playlist?list=EDITME",
+	"2023_05_08": "https://music.youtube.com/playlist?list=PLN_vS3zireLCkuzTMni2zZEwhZav02Yu7",
 }
 
 mainWorkingDir = os.getcwd()
@@ -60,7 +60,7 @@ for currentName in links:
 			print(f"got {len(videoList)} / {fullSize} videos")
 
 
-	pool = multiprocessing.Pool(processes=4)
+	pool = multiprocessing.Pool(processes=os.cpu_count())
 	pool.map(downloadVideo, videoList)
 
 	os.chdir(mainWorkingDir)
