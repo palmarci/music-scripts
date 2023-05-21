@@ -4,7 +4,7 @@ import time
 import multiprocessing
 
 links = {
-	"2023_05_08": "https://music.youtube.com/playlist?list=PLN_vS3zireLCkuzTMni2zZEwhZav02Yu7",
+	"EDITME": "https://music.youtube.com/playlist?list=EDITME",
 }
 
 mainWorkingDir = os.getcwd()
