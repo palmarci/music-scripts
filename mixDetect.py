@@ -89,8 +89,8 @@ def process_wav_data(input_file, output_dir, segment_duration, skip_duration, oc
 			segment_filename = f'segment_{segment_name}.wav'
 
 			# Check if it's a whole minute and print info
-			if segment_name.endswith('_00'):
-				print(f'...{segment_name.replace("_", ":")}')
+		#	if segment_name.endswith('_00'):
+		#		print(f'...{segment_name.replace("_", ":")}')
 
 			command = f'songrec audio-file-to-recognized-song "{output_file}"'
 			result = subprocess.check_output(command, shell=True).decode().strip()
@@ -120,16 +120,16 @@ def process_wav_data(input_file, output_dir, segment_duration, skip_duration, oc
 
 def main():
 	# Create an argument parser
-	parser = argparse.ArgumentParser(description='Detects the track IDs from a DJ mix using SongRec.')
+	parser = argparse.ArgumentParser(description='Detects the track IDs from a DJ mix using SongRec (Shazam).')
 
 	# Add the input file path argument
 	parser.add_argument('input_file', type=str, help='path to the input file')
 
 	# Add optional arguments for segment duration, skip duration, occurrences, and output directory
-	parser.add_argument('--segment-duration', type=float, default=10,
-						help='duration of each segment in seconds (default: 10)')
-	parser.add_argument('--skip-duration', type=float, default=20,
-						help='duration to skip between segments in seconds (default: 20)')
+	parser.add_argument('--segment-duration', type=float, default=15,
+						help='duration of each segment in seconds (default: 15)')
+	parser.add_argument('--skip-duration', type=float, default=15,
+						help='duration to skip between segments in seconds (default: 15)')
 	parser.add_argument('--occurrences', type=int, default=2,
 						help='minimum number of occurrences for a result to be printed (default: 2)')
 
