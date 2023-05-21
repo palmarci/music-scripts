@@ -31,11 +31,18 @@ def check_and_convert_to_wav(input_file):
 
 def get_segment_name(segment_index, segment_duration, skip_duration):
 	start_time = segment_index * (segment_duration + skip_duration)
-	minutes = int(start_time / 60)
+	hours = int(start_time / 3600)
+	minutes = int((start_time % 3600) / 60)
 	seconds = int(start_time % 60)
-	return f'{minutes:02d}:{seconds:02d}'
+	return f'{hours:02d}_{minutes:02d}_{seconds:02d}'
 
 def process_wav_data(input_file, output_dir, segment_duration, skip_duration, occurrences):
+	def print_summary_lines(summary_lines):
+		print("\n----------")
+		print("\n".join(summary_lines))
+		print("\nThis is an automated tracklist. Please reply with your suggestions and corrections.")
+		print("----------")
+
 	# Open the input WAV file
 	with wave.open(input_file, 'rb') as wav_file:
 		# Get the parameters of the input file
@@ -56,6 +63,7 @@ def process_wav_data(input_file, output_dir, segment_duration, skip_duration, oc
 		start_frame = 0
 		results = []
 		printed_titles = set()
+		summary_lines = []
 
 		while start_frame < total_frames:
 			# Calculate the end frame for the current segment
@@ -79,12 +87,11 @@ def process_wav_data(input_file, output_dir, segment_duration, skip_duration, oc
 
 			# Run the songrec command for the segment
 			segment_filename = f'segment_{segment_name}.wav'
-			
-			# check if its a whole minute and print info
-			currentTime = segment_filename.replace('segment_', '').replace('.wav', '')
-			if ":00" in currentTime:
-				print(f'...{currentTime}')
-			
+
+			# Check if it's a whole minute and print info
+			if segment_name.endswith('_00'):
+				print(f'...{segment_name.replace("_", ":")}')
+
 			command = f'songrec audio-file-to-recognized-song "{output_file}"'
 			result = subprocess.check_output(command, shell=True).decode().strip()
 
@@ -96,17 +103,18 @@ def process_wav_data(input_file, output_dir, segment_duration, skip_duration, oc
 				results.append(result_obj)
 
 				if title not in printed_titles:
-					count = 0
-					for i in results:
-						if i.title == title:
-							count += 1
-					#print(count)
+					text_to_print = f'{title} @ {segment_name.replace("_", ":")}'
+					print(text_to_print)
+					count = sum(1 for res in results if res.title == title)
 					if count >= occurrences:
-						print(f'{title} @ {segment_name}')
+						#print(text_to_print)
+						summary_lines.append(text_to_print)
 						printed_titles.add(title)
 
 			segment_count += 1
 			start_frame += segment_frames + skip_frames
+
+	print_summary_lines(summary_lines)
 
 	return results
 
@@ -122,7 +130,7 @@ def main():
 						help='duration of each segment in seconds (default: 15)')
 	parser.add_argument('--skip-duration', type=float, default=30,
 						help='duration to skip between segments in seconds (default: 30)')
-	parser.add_argument('--occurrences', type=int, default=2,
+	parser.add_argument('--occurrences', type=int, default=3,
 						help='minimum number of occurrences for a result to be printed (default: 2)')
 
 	# Parse the command-line arguments
