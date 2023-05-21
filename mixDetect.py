@@ -5,11 +5,23 @@ import shutil
 import subprocess
 import json
 import tempfile
+from datetime import datetime, timedelta
 
 class Result:
 	def __init__(self, title, segment_name):
 		self.title = title
-		self.segment_name = segment_name
+		self.timestamp = self.parse_timestamp(segment_name)
+
+	@staticmethod
+	def parse_timestamp(segment_name):
+		segments = segment_name.split('_')
+		hours = int(segments[0])
+		minutes = int(segments[1])
+		seconds = int(segments[2])
+		return timedelta(hours=hours, minutes=minutes, seconds=seconds)
+
+	def __str__(self):
+		return f'{self.title} @ {self.timestamp}'
 
 def check_and_convert_to_wav(input_file):
 	# Check if the input file is already in WAV format
@@ -23,10 +35,11 @@ def check_and_convert_to_wav(input_file):
 	output_wav_file = os.path.join(temp_dir, 'converted.wav')
 
 	# Use FFmpeg to convert the input file to WAV format
-	print(f"converting to {output_wav_file}...")
+	print(f"Converting to {output_wav_file}...")
 	command = f'ffmpeg -i "{input_file}" -hide_banner -loglevel panic "{output_wav_file}"'
 	subprocess.run(command, shell=True)
-	print("converted\n")
+	print("Converted to WAV")
+
 	return output_wav_file
 
 def get_segment_name(segment_index, segment_duration, skip_duration):
@@ -36,13 +49,25 @@ def get_segment_name(segment_index, segment_duration, skip_duration):
 	seconds = int(start_time % 60)
 	return f'{hours:02d}_{minutes:02d}_{seconds:02d}'
 
-def process_wav_data(input_file, output_dir, segment_duration, skip_duration, occurrences):
-	def print_summary_lines(summary_lines):
-		print("\n----------")
-		print("\n".join(summary_lines))
-		print("\nThis is an automatically generated tracklist. Please reply with your suggestions and corrections.")
-		print("----------")
+def print_summary(results, occurrences, time_window):
+	printed_titles = set()
 
+	summary_lines = []
+	for result_obj in results:
+		title = result_obj.title
+		if title not in printed_titles:
+			count = sum(1 for res in results if res.title == title and abs(res.timestamp - result_obj.timestamp) <= time_window)
+			if count >= occurrences:
+				text_to_print = f'{result_obj.title} @ {result_obj.timestamp}'
+				summary_lines.append(text_to_print)
+				printed_titles.add(title)
+
+	print("\n----------")
+	print("\n".join(summary_lines))
+	print("\nThis is an automatically generated tracklist. Please reply with your suggestions and corrections.")
+	print("----------")
+
+def process_wav_data(input_file, output_dir, segment_duration, skip_duration, occurrences, time_window):
 	# Open the input WAV file
 	with wave.open(input_file, 'rb') as wav_file:
 		# Get the parameters of the input file
@@ -61,9 +86,7 @@ def process_wav_data(input_file, output_dir, segment_duration, skip_duration, oc
 		# Split the WAV file into segments
 		segment_count = 0
 		start_frame = 0
-		results = []
-		printed_titles = set()
-		summary_lines = []
+		allResults = []
 
 		while start_frame < total_frames:
 			# Calculate the end frame for the current segment
@@ -88,10 +111,6 @@ def process_wav_data(input_file, output_dir, segment_duration, skip_duration, oc
 			# Run the songrec command for the segment
 			segment_filename = f'segment_{segment_name}.wav'
 
-			# Check if it's a whole minute and print info
-		#	if segment_name.endswith('_00'):
-		#		print(f'...{segment_name.replace("_", ":")}')
-
 			command = f'songrec audio-file-to-recognized-song "{output_file}"'
 			result = subprocess.check_output(command, shell=True).decode().strip()
 
@@ -100,38 +119,30 @@ def process_wav_data(input_file, output_dir, segment_duration, skip_duration, oc
 			if "track" in result_data:
 				title = result_data["track"]["subtitle"] + ' - ' + result_data["track"]["title"]
 				result_obj = Result(title, segment_name)
-				results.append(result_obj)
-
-				if title not in printed_titles:
-					text_to_print = f'{title} @ {segment_name.replace("_", ":")}'
-					print(text_to_print)
-					count = sum(1 for res in results if res.title == title)
-					if count >= occurrences:
-						#print(text_to_print)
-						summary_lines.append(text_to_print)
-						printed_titles.add(title)
+				allResults.append(result_obj)
+				print(result_obj)
 
 			segment_count += 1
 			start_frame += segment_frames + skip_frames
 
-	print_summary_lines(summary_lines)
-
-	return results
+		print_summary(allResults, occurrences, time_window)
 
 def main():
 	# Create an argument parser
-	parser = argparse.ArgumentParser(description='Detects the track IDs from a DJ mix using SongRec (Shazam).')
+	parser = argparse.ArgumentParser(description='Detects the track IDs from a DJ mix using SongRec (Shazam). SongRec should be in PATH!')
 
 	# Add the input file path argument
 	parser.add_argument('input_file', type=str, help='path to the input file')
 
-	# Add optional arguments for segment duration, skip duration, occurrences, and output directory
+	# Add optional arguments for segment duration, skip duration, occurrences, time window, and output directory
 	parser.add_argument('--segment-duration', type=float, default=15,
 						help='duration of each segment in seconds (default: 15)')
 	parser.add_argument('--skip-duration', type=float, default=15,
 						help='duration to skip between segments in seconds (default: 15)')
 	parser.add_argument('--occurrences', type=int, default=2,
 						help='minimum number of occurrences for a result to be printed (default: 2)')
+	parser.add_argument('--time-window', type=int, default=5,
+						help='time window in minutes to consider for occurrences (default: 5)')
 
 	# Parse the command-line arguments
 	args = parser.parse_args()
@@ -147,15 +158,16 @@ def main():
 	# Convert the input file to WAV if necessary
 	input_file = check_and_convert_to_wav(input_file)
 
-	# Extract the segment duration, skip duration, and occurrences from the arguments
+	# Extract the segment duration, skip duration, occurrences, and time window from the arguments
 	segment_duration = args.segment_duration
 	skip_duration = args.skip_duration
 	occurrences = args.occurrences
+	time_window = timedelta(minutes=args.time_window)
 
 	# Create a temporary directory to store the output segments
 	with tempfile.TemporaryDirectory(prefix='output_') as output_dir:
 		# Call the process_wav_data function
-		results = process_wav_data(input_file, output_dir, segment_duration, skip_duration, occurrences)
+		process_wav_data(input_file, output_dir, segment_duration, skip_duration, occurrences, time_window)
 
 if __name__ == '__main__':
 	main()
