@@ -17,7 +17,7 @@ def check_and_convert_to_wav(input_file):
 		return input_file
 
 	# Create a temporary directory to store the converted WAV file
-	temp_dir = tempfile.mkdtemp(prefix='tmp_', dir='/tmp')
+	temp_dir = tempfile.mkdtemp(prefix='tmp_')
 
 	# Generate the output WAV file path
 	output_wav_file = os.path.join(temp_dir, 'converted.wav')
@@ -40,7 +40,7 @@ def process_wav_data(input_file, output_dir, segment_duration, skip_duration, oc
 	def print_summary_lines(summary_lines):
 		print("\n----------")
 		print("\n".join(summary_lines))
-		print("\nThis is an automated tracklist. Please reply with your suggestions and corrections.")
+		print("\nThis is an automatically generated tracklist. Please reply with your suggestions and corrections.")
 		print("----------")
 
 	# Open the input WAV file
@@ -126,11 +126,11 @@ def main():
 	parser.add_argument('input_file', type=str, help='path to the input file')
 
 	# Add optional arguments for segment duration, skip duration, occurrences, and output directory
-	parser.add_argument('--segment-duration', type=float, default=15,
-						help='duration of each segment in seconds (default: 15)')
-	parser.add_argument('--skip-duration', type=float, default=30,
-						help='duration to skip between segments in seconds (default: 30)')
-	parser.add_argument('--occurrences', type=int, default=3,
+	parser.add_argument('--segment-duration', type=float, default=10,
+						help='duration of each segment in seconds (default: 10)')
+	parser.add_argument('--skip-duration', type=float, default=20,
+						help='duration to skip between segments in seconds (default: 20)')
+	parser.add_argument('--occurrences', type=int, default=2,
 						help='minimum number of occurrences for a result to be printed (default: 2)')
 
 	# Parse the command-line arguments
@@ -153,13 +153,9 @@ def main():
 	occurrences = args.occurrences
 
 	# Create a temporary directory to store the output segments
-	output_dir = tempfile.mkdtemp(prefix='output_', dir='/tmp')
-
-	# Call the process_wav_data function
-	results = process_wav_data(input_file, output_dir, segment_duration, skip_duration, occurrences)
-
-	# Delete the temporary directory
-	shutil.rmtree(output_dir)
+	with tempfile.TemporaryDirectory(prefix='output_') as output_dir:
+		# Call the process_wav_data function
+		results = process_wav_data(input_file, output_dir, segment_duration, skip_duration, occurrences)
 
 if __name__ == '__main__':
 	main()
