@@ -1,15 +1,33 @@
 import os
-import youtube_dl
-
+from yt_dlp import YoutubeDL
+import time
+import multiprocessing
 
 links = {
-	"demo": "https://www.youtube.com/playlist?list=EDITME"
+	"demo": "https://music.youtube.com/playlist?list=EDITME",
 }
 
 mainWorkingDir = os.getcwd()
 
 def normalizeFilename(name):
-	return name.replace(' - Topic', '').replace('.', '').replace("'", '').replace(':', '')
+	name = name.strip()
+	name = name.replace(' - Topic', '').replace('.', '').replace("'", '').replace(':', '').replace("/", "").replace('"', '')
+	return name
+
+def downloadVideo(video):
+	if video is None or video['title'] is None or video["id"] is None:
+		return
+
+	print(f"{video['title']} - [{video['id']}]")
+				
+	dlFileName = normalizeFilename(video["title"] + " - " + video["uploader"]) + "." + video["ext"]
+				
+	dlCommand = 'yt-dlp -q -f bestaudio -o "' + dlFileName + '" "https://www.youtube.com/watch?v=' + video["id"] + '"'
+	os.system(dlCommand)
+				
+	normalizeCommand = "python '" + mainWorkingDir + "/normalizer.py' '" + dlFileName + "'"
+	os.system(normalizeCommand)
+
 
 for currentName in links:
 	os.chdir(mainWorkingDir)
@@ -22,27 +40,27 @@ for currentName in links:
 
 	os.chdir(os.path.join(mainWorkingDir, currentName))
 
-	ydl = youtube_dl.YoutubeDL({'quiet': True})
-	video = ""
-	with ydl:
-		result = ydl.extract_info(currentLink, download=False)
-		if 'entries' in result:
-			video = result['entries']
-			for i, item in enumerate(video):
+	ydl = YoutubeDL({'quiet': False, 'verbose': False, 'ignoreerrors': True})
 
-				# found video
-				video = result['entries'][i]
-				print(f"{i+1}/{len(result['entries'])}: {video['title']} [{video['id']}]")
-				
-				# get output name
-				dlFileName = normalizeFilename(video["title"] + " - " + video["uploader"]) + "." + video["ext"]
-				
-				# download audio
-				dlCommand = 'yt-dlp -f bestaudio -o "' + dlFileName + '" "https://www.youtube.com/watch?v=' + video["id"] + '"'
-				os.system(dlCommand)
-				
-				# pass it to the converter/normalizer
-				normalizeCommand = "python '" + mainWorkingDir + "/normalizer.py' '" + dlFileName + "'"
-				os.system(normalizeCommand)
+	videoList = []
+
+	with ydl:
+		try:
+			time.sleep(0.5)
+			result = ydl.extract_info(currentLink, download=False)
+		except:
+			print("failed video #{currentLink}")
+			continue
+
+		if 'entries' in result:
+			videos = result['entries']
+			for video in videos:
+				videoList.append(video)
+			fullSize = len(result['entries'])
+			print(f"got {len(videoList)} / {fullSize} videos")
+
+
+	pool = multiprocessing.Pool(processes=4)
+	pool.map(downloadVideo, videoList)
 
 	os.chdir(mainWorkingDir)
