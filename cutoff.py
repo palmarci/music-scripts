@@ -3,23 +3,25 @@ import hashlib
 import os
 import sys
 import subprocess
-from multiprocessing import Pool
+from multiprocessing import Pool, Manager, Lock
 import fnmatch
 import numpy as np
 from scipy.fft import fft
 from scipy.io import wavfile
+import tempfile
 import matplotlib.pyplot as plt
 
+processed = 0
+temp_dir = tempfile.mkdtemp()
+lock = Lock()
 
 def run_command(command):
 	sub_process = subprocess.check_output(command, shell=True)
 	return str(sub_process.decode('utf-8'))
 
-
 def get_average_by_hertz_range(data_set, wanted_hz_beginning, wanted_hz_end, samples_per_hz):
 	data = data_set[int(wanted_hz_beginning * samples_per_hz):int(wanted_hz_end * samples_per_hz)]
 	return sum(data) / len(data)
-
 
 def get_song_data(samp_freq, snd):
 	channel = snd[:, 0]
@@ -29,7 +31,6 @@ def get_song_data(samp_freq, snd):
 	time_array = time_array * 1000
 
 	return time_array, channel
-
 
 def get_cutoff(file_name, min_search_hz, max_search_hz, hz_step, hz_range):
 	samp_freq, snd = wavfile.read(file_name)
@@ -88,10 +89,8 @@ def get_cutoff(file_name, min_search_hz, max_search_hz, hz_step, hz_range):
 
 	return cutoff
 
-
-def get_file_hash(file):
-	return hashlib.md5(file.encode('utf-8')).hexdigest()
-
+def get_file_hash(filename):
+	return hashlib.md5(filename.encode('utf-8')).hexdigest()
 
 def is_audio_format(ext):
 	extensions = ['3gp', '8svx', 'aa', 'aac', 'aax', 'act', 'aiff', 'alac', 'amr', 'ape', 'au', 'awb', 'cda', 'dss',
@@ -104,7 +103,6 @@ def is_audio_format(ext):
 	else:
 		return False
 
-
 def extract_files(directory, pattern):
 	for root, dirs, files in os.walk(directory):
 		for basename in files:
@@ -112,31 +110,38 @@ def extract_files(directory, pattern):
 				file_name = os.path.join(root, basename)
 				yield file_name
 
-
-def process(file_name, min_search_hz, max_search_hz, hz_step, hz_range):
+def process(file_name, min_search_hz, max_search_hz, hz_step, hz_range, filecount, processed):
 	cutoff = None
 	file_format = os.path.splitext(file_name)[1]
 
-	if file_format != ".wav":
-		temp_file_name = '/tmp/' + get_file_hash(file_name) + '.wav'
+	if file_format != ".wav":        
+		temp_file_name = os.path.join(temp_dir, get_file_hash(file_name) + '.wav')
 		run_command(f'ffmpeg -y -nostats -loglevel panic -hide_banner -i "{file_name}" "{temp_file_name}"')
 		cutoff = get_cutoff(temp_file_name, min_search_hz, max_search_hz, hz_step, hz_range)
-		run_command(f"rm {temp_file_name}")
+		os.remove(temp_file_name)
 	else:
 		cutoff = get_cutoff(file_name, min_search_hz, max_search_hz, hz_step, hz_range)
 
-	if cutoff >= 20000:
-		print(f"    {file_name}: {cutoff}")
-	else:
-		print(f"!!! {file_name}: {cutoff}")
+	with lock:
+		processed.value += 1
+		current_processed = processed.value
 
+	if cutoff >= 20000:
+		print(f"    [{current_processed}/{filecount.value}] - {file_name}: {cutoff}")
+	else:
+		print(f"!!! [{current_processed}/{filecount.value}] - {file_name}: {cutoff}")
 
 def main():
+	manager = Manager()
+	filecount = manager.Value('i', 0)
+	processed = manager.Value('i', 0)
+
 	parser = argparse.ArgumentParser(description="""Detect the cutoff frequency of audio files in a given directory.
 		\r\n
-		WARNING: high cpu and memory usage. subprocesses can get killed by the kernel if the system is out of memory. 
-		it is very recommended to have swap, unless the script will hang and not exit properly, waiting for the dead subprocesses. 
-		not bothered to fix it, maybe just lower the threads? or there is a memory leak somewhere?""")
+		WARNING: high CPU and memory usage. Subprocesses can get killed by the kernel if the system is out of memory. 
+		It is highly recommended to have swap space, otherwise the script may hang and not exit properly, waiting for the dead subprocesses. 
+		If the issue persists, you may need to lower the number of threads or investigate if there is a memory leak.""")
+
 	parser.add_argument('folder', help='The folder to search for audio files')
 	parser.add_argument('--min-search-hz', type=int, default=10000, help='The minimum search frequency in Hz')
 	parser.add_argument('--max-search-hz', type=int, default=24000, help='The maximum search frequency in Hz')
@@ -145,8 +150,8 @@ def main():
 
 	args = parser.parse_args()
 
-	cpus = os.cpu_count() - 1 # it will literally kernel panic somehow lol
-	print(f'starting with {cpus} threads')
+	cpus = os.cpu_count() - 1  # Don't freeze the OS
+	print(f'Starting with {cpus} threads')
 	pool = Pool(processes=cpus)
 
 	file_list = []
@@ -156,13 +161,14 @@ def main():
 		if is_audio_format(file_format):
 			file_list.append(file_name)
 		else:
-			print(f"skipping file {file_name}, is it an audio file?")
+			print(f"Skipping file {file_name}, as it is not an audio file.")
 			continue
 
-	print(f'found {len(file_list)} audio files in the directory')
-	#sys.exit(1)
-	pool.starmap(process, [(file_name, args.min_search_hz, args.max_search_hz, args.hz_step, args.hz_range) for file_name in file_list])
+	filecount.value = len(file_list)
+	print(f'Found {filecount.value} audio files in the directory')
 
+	pool.starmap(process, [(file_name, args.min_search_hz, args.max_search_hz, args.hz_step, args.hz_range, filecount, processed)
+						   for file_name in file_list])
 
 if __name__ == '__main__':
 	main()
