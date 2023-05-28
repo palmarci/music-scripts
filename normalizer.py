@@ -4,7 +4,7 @@ import sys
 import re
 import subprocess
 
-expectedDb = -9.5 # lufs(?)
+targetDb = -9.5 #lufs
 cuttoffHz = 20000
 codecBitrate = 256
 
@@ -15,6 +15,7 @@ def runCommand(command):
 def r128Stats(filePath):
 	ffargs = ['ffmpeg', '-nostats', '-i', filePath, '-filter_complex', 'ebur128', '-f', 'null', '-']
 	try:
+		#print(ffargs)
 		proc = subprocess.Popen(ffargs, stderr=subprocess.PIPE)
 		stats = proc.communicate()[1]
 		stats = stats.decode('utf-8')
@@ -53,15 +54,15 @@ def applyGain(inPath, outPath, linearAmount):
 
 	return True
 
-def startNormalization(filePath, quality):
+def startNormalization(filePath):
 	loudnessStats = r128Stats(filePath)
 
 	if not loudnessStats:
 		print("[E] Got empty loudness data!")
 		sys.exit(1)
 
-	gainAmount = linearGain(loudnessStats['I'], expectedDb)
-	outputPath = os.path.splitext(filePath)[0]  + quality + ".m4a"
+	gainAmount = linearGain(loudnessStats['I'], targetDb)
+	outputPath = os.path.splitext(filePath)[0]  + ".m4a"
 
 	if os.path.isfile(outputPath):
 		print("[I] Skipping file, already exists at " + outputPath)
@@ -73,12 +74,12 @@ def startNormalization(filePath, quality):
 
 def main():
 	fileName = str(sys.argv[1])
-	filePathWav = os.path.splitext(fileName)[0] + ".wav"
-	runCommand('ffmpeg -i "' + fileName + '" -y -nostats -loglevel 0 "' + filePathWav + '"')
+	#filePathWav = os.path.splitext(fileName)[0] + ".wav"
+	#runCommand('ffmpeg -i "' + fileName + '" -y -nostats -loglevel 0 "' + filePathWav + '"')
 
 	startNormalization(fileName)
 
-	runCommand("rm '" + filePathWav + "'")
+	#runCommand("rm '" + filePathWav + "'")
 	runCommand('rm "' + fileName + '"')
 
 main()
