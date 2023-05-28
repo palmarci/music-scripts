@@ -4,7 +4,7 @@ import time
 import multiprocessing
 
 links = {
-	"EDITME": "https://music.youtube.com/playlist?list=EDITME",
+	"EDITME": "https://www.youtube.com/playlist?list=EDITME",
 }
 
 mainWorkingDir = os.getcwd()
@@ -20,9 +20,9 @@ def downloadVideo(video):
 
 	print(f"{video['title']} - [{video['id']}]")
 				
-	dlFileName = normalizeFilename(video["title"] + " - " + video["uploader"]) + "." + video["ext"]
+	dlFileName = normalizeFilename(video["title"] + " - " + video["uploader"]) + ".wav"
 				
-	dlCommand = 'yt-dlp -q -f bestaudio -o "' + dlFileName + '" "https://www.youtube.com/watch?v=' + video["id"] + '"'
+	dlCommand = f'yt-dlp -q -f bestaudio -o "{dlFileName}" --extract-audio --audio-format wav "https://www.youtube.com/watch?v={video["id"]}"'
 	os.system(dlCommand)
 				
 	normalizeCommand = "python '" + mainWorkingDir + "/normalizer.py' '" + dlFileName + "'"
@@ -46,7 +46,7 @@ for currentName in links:
 
 	with ydl:
 		try:
-			time.sleep(0.5)
+			time.sleep(0.1) # youtube api restriction by IP???
 			result = ydl.extract_info(currentLink, download=False)
 		except:
 			print("failed video #{currentLink}")
@@ -59,8 +59,14 @@ for currentName in links:
 			fullSize = len(result['entries'])
 			print(f"got {len(videoList)} / {fullSize} videos")
 
+	cpu = os.cpu_count()
+	if cpu >= 8:
+		cpu = cpu -2
+	else:
+		cpu = cpu -1 
 
-	pool = multiprocessing.Pool(processes=os.cpu_count())
+	print(f"starting with {cpu} threads")
+	pool = multiprocessing.Pool(processes=cpu)
 	pool.map(downloadVideo, videoList)
 
 	os.chdir(mainWorkingDir)
