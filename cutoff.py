@@ -150,9 +150,14 @@ def main():
 
 	args = parser.parse_args()
 
-	cpus = os.cpu_count() - 1  # Don't freeze the OS
-	print(f'Starting with {cpus} threads')
-	pool = Pool(processes=cpus)
+	cpu = os.cpu_count()
+	if cpu >= 8:
+		cpu = cpu -2
+	else:
+		cpu = cpu -1 
+
+	print(f'Starting with {cpu} threads')
+	pool = Pool(processes=cpu)
 
 	file_list = []
 
