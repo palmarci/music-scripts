@@ -3,10 +3,10 @@
 my python scripts for downloading, encoding and checking music
 
 - downloader.py: downloads a youtube playlist with **yt-dlp**
-- normalizer.py: extracts the encoded files with **ffmpeg**, normalizes their loudness and also encodes them with **fdkaac**.
-- cutoff.py: analyses a folder full of music files and prints the cutoff frequency. it is mainly used to determine the files quality
+- normalizer.py: normalizes the files' loudness using **ffmpeg** and also encodes them with **fdkaac**.
+- cutoff.py: analyses a folder full of music files and prints their cutoff frequency. it is mainly used to determine the files quality
 - plotMixBPM.py: draws the input file's BPM onto a graph
-- mixDetect.py: loops trough an audio file and uses **songrec** to recognize songs 
+- mixDetect.py: loops trough an audio file and uses **songrec** to recognize songs via the shazam api 
 
 please also note that the calculations are not perfect but they are good enough for me
 
