@@ -41,8 +41,8 @@ def get_song_data(samp_freq, snd):
 	return time_array, channel
 
 
-
-def get_cutoff(file_name, min_search_hz, hz_step, duration, downsample_size):
+def get_cutoff(file_name, min_search_hz, hz_step, duration, downsample_size, original_filename, accepted_hz):
+	global processed
 	# Calculate the cutoff frequency of a sound file
 	samp_freq, snd = wavfile.read(file_name)
 
@@ -85,20 +85,39 @@ def get_cutoff(file_name, min_search_hz, hz_step, duration, downsample_size):
 
 	# Get the x-value at the index of the maximum slope
 	x_max_slope = plotHzs_downsampled[index_max_slope]
+	
+
+
+	plt.close()
+
+	if x_max_slope >= accepted_hz:
+		log(f"    [{processed}/{filecount}] - '{file_name}': {x_max_slope}")
+	else:
+		log(f"!!! [{processed}/{filecount}] - '{file_name}': {x_max_slope}")
+		plt.figure(facecolor='red')
+
+
+
 
 	plt.plot(plotHzs, plotDbs, color="blue")
 	plt.plot(plotHzs_downsampled, plotDbs_downsampled, color='r', linewidth=2)
 	plt.xlabel('Frequency (Hz)')
 	plt.ylabel('Power (dB)')
 	plt.axvline(x=x_max_slope, color='g')
-	#plt.savefig(temp_dir + '/last_plot.jpg')
+	plt.text(0, 0, os.path.basename(original_filename), fontsize=10)
+
+
+	processed += 1
+
 
 	if debug:
-		plt.show()
+		plt.savefig(temp_dir + '/last_plot.png')
+	#	plt.show()
 
 	plt.close()
 
-	return x_max_slope
+
+	return
 
 
 def smooth_spectrum(spectrum, window_size=11):
@@ -128,24 +147,17 @@ def extract_files(directory, pattern):
 				yield file_name
 
 def process(file_name, args):
-	global processed
 	cutoff = None
 	file_format = os.path.splitext(file_name)[1]
 
 	if file_format != ".wav":
 		temp_file_name = os.path.join(temp_dir, get_file_hash(file_name) + '.wav')
 		run_command(f'ffmpeg -y -nostats -loglevel panic -hide_banner -i "{file_name}" "{temp_file_name}"')
-		cutoff = get_cutoff(temp_file_name, args.min_search_hz, args.hz_step, args.duration, args.downsample_size)
+		cutoff = get_cutoff(temp_file_name, args.min_search_hz, args.hz_step, args.duration, args.downsample_size, file_name, args.accepted_hz)
 		os.remove(temp_file_name)
 	else:
 		cutoff = get_cutoff(file_name, args.min_search_hz, args.hz_step, args.duration, args.downsample_size)
 
-	processed += 1
-
-	if cutoff >= args.accepted_hz:
-		log(f"    [{processed}/{filecount}] - '{file_name}': {cutoff}")
-	else:
-		log(f"!!! [{processed}/{filecount}] - '{file_name}': {cutoff}")
 
 def main():
 	global filecount, debug
