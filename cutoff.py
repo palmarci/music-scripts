@@ -91,9 +91,9 @@ def get_cutoff(file_name, min_search_hz, hz_step, duration, downsample_size, ori
 	plt.close()
 
 	if x_max_slope >= accepted_hz:
-		log(f"    [{processed}/{filecount}] - '{file_name}': {x_max_slope}")
+		log(f"    [{processed}/{filecount}] - '{original_filename}': {x_max_slope}")
 	else:
-		log(f"!!! [{processed}/{filecount}] - '{file_name}': {x_max_slope}")
+		log(f"!!! [{processed}/{filecount}] - '{original_filename}': {x_max_slope}")
 		plt.figure(facecolor='red')
 
 
