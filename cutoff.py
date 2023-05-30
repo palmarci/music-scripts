@@ -10,11 +10,22 @@ from scipy.io import wavfile
 import tempfile
 import matplotlib.pyplot as plt
 import traceback
+import numpy as np
+from scipy.io import wavfile
+from scipy.signal import find_peaks
+import matplotlib.pyplot as plt
+from scipy.signal import savgol_filter
+
+
 
 processed = 0
 filecount = 0
 debug = False
 temp_dir = tempfile.mkdtemp()
+
+def log(msg): 
+	# dirty hack so we can redirect the output and tail -f the file
+	print(msg, flush=True)
 
 def run_command(command):
 	# Execute a shell command and return the output as a string
@@ -28,10 +39,10 @@ def get_average_by_hertz_range(data_set, wanted_hz_beginning, wanted_hz_end, sam
 	try:
 		final_cutoff = sum(data) / len(data)
 	except Exception as e:
-		print("\nERROR:")
-		print(data, wanted_hz_beginning, wanted_hz_end, samples_per_hz)
-		print(e)
-		print(f"{traceback.format_exc()}")
+		log("\nERROR:")
+		log(data, wanted_hz_beginning, wanted_hz_end, samples_per_hz)
+		log(e)
+		log(f"{traceback.format_exc()}")
 	return final_cutoff
 
 def get_song_data(samp_freq, snd):
@@ -42,7 +53,9 @@ def get_song_data(samp_freq, snd):
 	time_array = time_array * 1000
 	return time_array, channel
 
-def get_cutoff(file_name, min_search_hz, max_search_hz, hz_step, duration):
+
+
+def get_cutoff(file_name, min_search_hz, hz_step, duration, downsample_size):
 	# Calculate the cutoff frequency of a sound file
 	samp_freq, snd = wavfile.read(file_name)
 
@@ -52,84 +65,55 @@ def get_cutoff(file_name, min_search_hz, max_search_hz, hz_step, duration):
 		snd = snd / (2. ** 31)
 
 	num_samples = int(samp_freq * duration)
-	snd_middle = snd[num_samples // 2 : num_samples // 2 + num_samples]
+	snd_middle = snd[num_samples // 2: num_samples // 2 + num_samples]
 
-	time_array, channel = get_song_data(samp_freq, snd_middle)
-	num_sample_points = len(channel)
+	freq_array, channel = get_song_data(samp_freq, snd_middle)
 
-	p = fft(channel)
+	p = np.abs(np.fft.fft(channel))
+	p = p[:len(p) // 2]  # Take only the positive frequencies
 
-	n_unique_pts = np.ceil((num_sample_points + 1) / 2.0)
-	p = p[0:int(n_unique_pts)]
+	plotHzs = np.arange(0, len(p)) * (samp_freq / len(channel))
+	plotDbs = 10 * np.log10(p)
 
-	p = np.abs(p)
-	p = p / float(num_sample_points)
-	p = p ** 2
+	plotHzs = np.array(plotHzs)
+	plotDbs = smooth_spectrum(np.array(plotDbs))
 
-	if num_sample_points % 2 > 0:
-		p[1:len(p)] = p[1:len(p)] * 2
-	else:
-		p[1:len(p) - 1] = p[1:len(p) - 1] * 2
+	downsampling_factor = len(plotHzs) // downsample_size
+	plotHzs_downsampled = plotHzs[::downsampling_factor]
+	plotDbs_downsampled = plotDbs[::downsampling_factor]
 
-	freq_array = np.arange(0, n_unique_pts, 1.0) * (samp_freq / num_sample_points)
+	plotHzs_downsampled = np.array(plotHzs_downsampled)
+	plotDbs_downsampled = smooth_spectrum(np.array(plotDbs_downsampled))
 
-	plotHzs = []
-	plotDbs = []
+	# Exclude the initial portion
+	exclude_start_index = int(min_search_hz / hz_step)
+	plotHzs_downsampled = plotHzs_downsampled[exclude_start_index:]
+	plotDbs_downsampled = plotDbs_downsampled[exclude_start_index:]
 
-	samples_per_hz = 1 / (samp_freq / num_sample_points)
+	slopes = np.gradient(plotDbs_downsampled, plotHzs_downsampled)
 
-	for i in range(min_search_hz, max_search_hz, hz_step):
-		current_avg = get_average_by_hertz_range(10 * np.log10(p), i - hz_step / 2, i + hz_step / 2, samples_per_hz)
-		plotHzs.append(i)
-		plotDbs.append(current_avg)
+	# Find the index of the point with the maximum negative slope
+	valid_slope_indices = np.where(slopes < 0)[0]
+	index_max_slope = valid_slope_indices[np.argmax(np.abs(slopes[valid_slope_indices]))]
 
-
-	fall_points = []
-	inclinations = []
-	average_power = np.mean(plotDbs)
-
-	for i in range(len(plotDbs) - 1):
-		if plotDbs[i] > plotDbs[i + 1]:
-			fall_points.append(plotHzs[i + 1])
-			inclination = plotDbs[i] - plotDbs[i + 1]
-			inclinations.append(inclination)
+	# Get the x-value at the index of the maximum slope
+	x_max_slope = plotHzs_downsampled[index_max_slope]
 
 	if debug:
-		for i in range(len(fall_points)):
-			print(f'{fall_points[i]}: {inclinations[i]}')
-
-	
-	current_cutoff_hz = fall_points[inclinations.index(max(inclinations))]
-	current_cutoff_pwr = plotDbs[plotHzs.index(current_cutoff_hz)]
-
-	accepted_cutoff_hz = min(plotHzs, key=lambda x:abs(x-max_search_hz))
-	accepted_cutoff_power = plotDbs[plotHzs.index(accepted_cutoff_hz)]
-
-	final_cutoff = 0.0
-
-	if current_cutoff_hz <= (accepted_cutoff_hz - 500): # due to the fact that i cant code
-		
-		threshold_pwr = max(plotDbs) * 1.30 # magic number lol
-		
-		if debug:
-			print(f'current cutoff: {current_cutoff_hz} hz @ {current_cutoff_pwr}, accepted cuttoff {accepted_cutoff_hz} hz @ {accepted_cutoff_power}')
-			print(f'threshold: {threshold_pwr} <=?  accepted: {accepted_cutoff_power}')
-
-		if  threshold_pwr <= accepted_cutoff_power:
-			final_cutoff = accepted_cutoff_hz
-		else:
-			final_cutoff = current_cutoff_hz
-	else:
-		final_cutoff = current_cutoff_hz
-
-	if debug:
-		plt.plot(plotHzs, plotDbs)
+		plt.plot(plotHzs, plotDbs, color="blue")
+		plt.plot(plotHzs_downsampled, plotDbs_downsampled, color='r', linewidth=2)
 		plt.xlabel('Frequency (Hz)')
 		plt.ylabel('Power (dB)')
-		plt.axvline(x=final_cutoff, color='r')
+		plt.axvline(x=x_max_slope, color='g')
 		plt.show()
 
-	return final_cutoff
+	return x_max_slope
+
+
+def smooth_spectrum(spectrum, window_size=11):
+	window = np.hanning(window_size)
+	smoothed = np.convolve(spectrum, window, mode='same') / sum(window)
+	return smoothed
 
 def get_file_hash(filename):
 	# Calculate the MD5 hash of a file's name
@@ -157,34 +141,34 @@ def process(file_name, args):
 	cutoff = None
 	file_format = os.path.splitext(file_name)[1]
 
-	#args.max_search_hz += 1000 # hack
-
 	if file_format != ".wav":
 		temp_file_name = os.path.join(temp_dir, get_file_hash(file_name) + '.wav')
 		run_command(f'ffmpeg -y -nostats -loglevel panic -hide_banner -i "{file_name}" "{temp_file_name}"')
-		cutoff = get_cutoff(temp_file_name, args.min_search_hz, args.max_search_hz, args.hz_step, args.duration)
+		cutoff = get_cutoff(temp_file_name, args.min_search_hz, args.hz_step, args.duration, args.downsample_size)
 		os.remove(temp_file_name)
 	else:
-		cutoff = get_cutoff(file_name, args.min_search_hz, args.max_search_hz, args.hz_step, args.duration)
+		cutoff = get_cutoff(file_name, args.min_search_hz, args.hz_step, args.duration, args.downsample_size)
 
 	processed += 1
 
-	if cutoff >= 19000:
-		print(f"    [{processed}/{filecount}] - '{file_name}': {cutoff}")
+	if cutoff >= args.accepted_hz:
+		log(f"    [{processed}/{filecount}] - '{file_name}': {cutoff}")
 	else:
-		print(f"!!! [{processed}/{filecount}] - '{file_name}': {cutoff}")
+		log(f"!!! [{processed}/{filecount}] - '{file_name}': {cutoff}")
 
 def main():
 	global filecount, debug
 
 	parser = argparse.ArgumentParser(description="Detect the cutoff frequency of audio files in a given directory.")
 
-	parser.add_argument('folder', help='The folder to search for audio files')
-	parser.add_argument('--min-search-hz', type=int, default=10000, help='The minimum search frequency in Hz')
-	parser.add_argument('--max-search-hz', type=int, default=20000, help='The maximum search frequency in Hz')
+	parser.add_argument('folder', help='The folder to search for audio files in')
+	parser.add_argument('--min-search-hz', type=int, default=10000, help='Start the search from this frequency.')
+	parser.add_argument('--accepted-hz', type=int, default=19500, help='The accepted cutoff frequency. We will accept these files and not throw warnings.')
 	parser.add_argument('--hz-step', type=int, default=100, help='The step size for frequency search in Hz')
-	parser.add_argument('--debug', type=bool, default=False, help='Plot debug graph')
-	parser.add_argument('--duration', type=int, default=60, help='Duration of the portion of the song to analyze in seconds')
+	parser.add_argument('--duration', type=int, default=60, help='Duration of the portion of the song to analyze in seconds (from the middle of the song)')
+	parser.add_argument('--downsample-size', type=int, default=200, help='Size to use while downsampling')
+	parser.add_argument('--debug', type=bool, default=False, help='Set to true for debug prints and graphs')
+
 
 
 	args = parser.parse_args()
@@ -198,12 +182,12 @@ def main():
 		if is_audio_format(file_format):
 			file_list.append(file_name)
 		else:
-			print(f"Skipping file {file_name}, as it is not an audio file.")
+			log(f"Skipping file {file_name}, as it is not an audio file.")
 			continue
 
 	file_list.sort()
 	filecount = len(file_list)
-	print(f'Found {filecount} audio files in the directory')
+	log(f'Found {filecount} audio files in the directory')
 
 	for f in file_list:
 		process(f, args)
