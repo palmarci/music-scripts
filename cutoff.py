@@ -156,7 +156,7 @@ def process(file_name, args):
 		cutoff = get_cutoff(temp_file_name, args.min_search_hz, args.hz_step, args.duration, args.downsample_size, file_name, args.accepted_hz)
 		os.remove(temp_file_name)
 	else:
-		cutoff = get_cutoff(file_name, args.min_search_hz, args.hz_step, args.duration, args.downsample_size)
+		cutoff = get_cutoff(file_name, args.min_search_hz, args.hz_step, args.duration, args.downsample_size, file_name, args.accepted_hz)
 
 
 def main():
@@ -171,6 +171,7 @@ def main():
 	parser.add_argument('--duration', type=int, default=60, help='Duration of the portion of the song to analyze in seconds (from the middle of the song)')
 	parser.add_argument('--downsample-size', type=int, default=200, help='Size to use while downsampling')
 	parser.add_argument('--debug', type=bool, default=False, help='Set to true for debug prints and graphs')
+	parser.add_argument('--skip-files', type=int, default=0, help='Number of files to skip (useful when recovering from a crashed run)')
 
 
 
@@ -189,6 +190,11 @@ def main():
 			continue
 
 	file_list.sort()
+
+	if args.skip_files > 0:
+		print(f'Warning!!! Skipping {args.skip_files } files')
+		file_list = file_list[args.skip_files:]
+
 	filecount = len(file_list)
 	log(f'Found {filecount} audio files in the directory')
 
