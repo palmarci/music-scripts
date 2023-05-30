@@ -1,22 +1,15 @@
-import argparse
-import hashlib
-import os
-import sys
-import subprocess
-import fnmatch
-import numpy as np
 from scipy.fft import fft
 from scipy.io import wavfile
-import tempfile
+import argparse
+import fnmatch
+import hashlib
 import matplotlib.pyplot as plt
-import traceback
 import numpy as np
-from scipy.io import wavfile
-from scipy.signal import find_peaks
-import matplotlib.pyplot as plt
-from scipy.signal import savgol_filter
-
-
+import os
+import subprocess
+import sys
+import tempfile
+import traceback
 
 processed = 0
 filecount = 0
@@ -36,13 +29,7 @@ def get_average_by_hertz_range(data_set, wanted_hz_beginning, wanted_hz_end, sam
 	# Calculate the average of a range of Hz values in a dataset
 	data = data_set[int(wanted_hz_beginning * samples_per_hz):int(wanted_hz_end * samples_per_hz)]
 	final_cutoff = 0
-	try:
-		final_cutoff = sum(data) / len(data)
-	except Exception as e:
-		log("\nERROR:")
-		log(data, wanted_hz_beginning, wanted_hz_end, samples_per_hz)
-		log(e)
-		log(f"{traceback.format_exc()}")
+	final_cutoff = sum(data) / len(data)
 	return final_cutoff
 
 def get_song_data(samp_freq, snd):
@@ -99,13 +86,17 @@ def get_cutoff(file_name, min_search_hz, hz_step, duration, downsample_size):
 	# Get the x-value at the index of the maximum slope
 	x_max_slope = plotHzs_downsampled[index_max_slope]
 
+	plt.plot(plotHzs, plotDbs, color="blue")
+	plt.plot(plotHzs_downsampled, plotDbs_downsampled, color='r', linewidth=2)
+	plt.xlabel('Frequency (Hz)')
+	plt.ylabel('Power (dB)')
+	plt.axvline(x=x_max_slope, color='g')
+	#plt.savefig(temp_dir + '/last_plot.jpg')
+
 	if debug:
-		plt.plot(plotHzs, plotDbs, color="blue")
-		plt.plot(plotHzs_downsampled, plotDbs_downsampled, color='r', linewidth=2)
-		plt.xlabel('Frequency (Hz)')
-		plt.ylabel('Power (dB)')
-		plt.axvline(x=x_max_slope, color='g')
 		plt.show()
+
+	plt.close()
 
 	return x_max_slope
 
