@@ -2,20 +2,23 @@
 # music-scripts
 my python scripts for downloading, encoding and checking music
 
-- downloader.py: downloads a youtube playlist with **yt-dlp**
-- normalizer.py: normalizes the files' loudness using **ffmpeg** and also encodes them with **fdkaac**.
-- cutoff.py: analyses a folder full of music files and prints their cutoff frequency. it is mainly used to determine the files quality
-- plotMixBPM.py: draws the input file's BPM onto a graph
-- mixDetect.py: loops trough an audio file and uses **songrec** to recognize songs via the shazam api 
+must be in path: ffmpeg-normalize, yt-dlp, ffmpeg, songrec
 
-please also note that the calculations are not perfect but they are good enough for me
+- downloader.py: downloads a youtube playlist and normalizes the output files
+- folder_normalizer.py: normalizes the files' loudness in a given folder
+- folder_cutoff.py: analyses a folder full of music files and prints their cutoff frequency. it is mainly used to determine the files' quality
+- mix_plot_bpm.py: draws the input file's BPM onto a graph
+- mix_detect.py: loops trough a long audio file and recognizes songs using the shazam api 
+- rb_mix_converter.py: converts every wav file in a given folder to mp3
+- ytmusic_batch_search.py: searches and returnes a YT Music link for every line in a given file
 
-https://github.com/yt-dlp/yt-dlp
+please also note that the scripts & calculations are not perfect but they are good enough for me
+also check out this great project to filter out duplicated music: https://codeberg.org/derat/soundalike
 
-https://github.com/marin-m/SongRec
-
-https://github.com/noahgolmant/py-audio-analysis 
-
-https://github.com/esonderegger/neg23 
-
-https://github.com/scaperot/the-BPM-detector-python 
+big thanks to:
+- https://github.com/yt-dlp/yt-dlp
+- https://github.com/marin-m/SongRec
+- https://github.com/noahgolmant/py-audio-analysis 
+- https://github.com/esonderegger/neg23 
+- https://github.com/scaperot/the-BPM-detector-python 
+- https://github.com/slhck/ffmpeg-normalize
