@@ -2,7 +2,7 @@
 # music-scripts
 my python scripts for downloading, encoding and checking music
 
-must be in path: ffmpeg-normalize, yt-dlp, ffmpeg, songrec
+these tools must be in in your path: ffmpeg-normalize, yt-dlp, ffmpeg, songrec
 
 - downloader.py: downloads a youtube playlist and normalizes the output files
 - folder_normalizer.py: normalizes the files' loudness in a given folder
@@ -13,6 +13,7 @@ must be in path: ffmpeg-normalize, yt-dlp, ffmpeg, songrec
 - ytmusic_batch_search.py: searches and returnes a YT Music link for every line in a given file
 
 please also note that the scripts & calculations are not perfect but they are good enough for me
+
 also check out this great project to filter out duplicated music: https://codeberg.org/derat/soundalike
 
 big thanks to:
