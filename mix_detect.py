@@ -6,6 +6,12 @@ import subprocess
 import json
 import tempfile
 from datetime import datetime, timedelta
+import sys
+import shutil
+from time import sleep
+
+tempdir = os.path.join(tempfile.gettempdir(), "mixdetect_temp")
+
 
 class Result:
 	def __init__(self, title, segment_name):
@@ -29,16 +35,20 @@ def check_and_convert_to_wav(input_file):
 		return input_file
 
 	# Create a temporary directory to store the converted WAV file
-	temp_dir = tempfile.mkdtemp(prefix='tmp_')
+	#temp_dir = tempfile.mkdtemp(prefix='tmp_')
 
 	# Generate the output WAV file path
-	output_wav_file = os.path.join(temp_dir, 'converted.wav')
+	output_wav_file = os.path.join(tempdir, 'converted.wav')
 
 	# Use FFmpeg to convert the input file to WAV format
 	print(f"Converting to {output_wav_file}...")
 	command = f'ffmpeg -i "{input_file}" -hide_banner -loglevel panic "{output_wav_file}"'
+	print(f"running command {command}")
 	subprocess.run(command, shell=True)
+	if not os.path.isfile(output_wav_file):
+		raise Exception("Failed to convert wav")
 	print("Converted to WAV")
+
 
 	return output_wav_file
 
@@ -81,7 +91,7 @@ def process_wav_data(input_file, output_dir, segment_duration, skip_duration, oc
 		skip_frames = int(skip_duration * frame_rate)
 
 		# Create the output directory if it doesn't exist
-		os.makedirs(output_dir, exist_ok=True)
+		#os.makedirs(output_dir, exist_ok=True)
 
 		# Split the WAV file into segments
 		segment_count = 0
@@ -100,7 +110,8 @@ def process_wav_data(input_file, output_dir, segment_duration, skip_duration, oc
 
 			# Create a new output WAV file
 			segment_name = get_segment_name(segment_count, segment_duration, skip_duration)
-			output_file = os.path.join(output_dir, f'segment_{segment_name}.wav')
+			segment_filename = f'segment_{segment_name}.wav'
+			output_file = os.path.join(output_dir, segment_filename)
 			with wave.open(output_file, 'wb') as output_wav:
 				# Set the output file parameters
 				output_wav.setnchannels(num_channels)
@@ -108,11 +119,20 @@ def process_wav_data(input_file, output_dir, segment_duration, skip_duration, oc
 				output_wav.setframerate(frame_rate)
 				output_wav.writeframes(frames)
 
-			# Run the songrec command for the segment
-			segment_filename = f'segment_{segment_name}.wav'
-
+			if not os.path.isfile(output_file):	
+				raise Exception(f"Failed to create segment {output_file}")
+			#try:
+			result = None
+			#try:
+			print(output_file)
+			sleep(3)
 			command = f'songrec audio-file-to-recognized-song "{output_file}"'
 			result = subprocess.check_output(command, shell=True).decode().strip()
+			#except Exception as e:
+			#	print(f"{e} happened, resuming...")
+
+			#if result == None:
+			#	continue
 
 			# Process the songrec output
 			result_data = json.loads(result)
@@ -155,6 +175,10 @@ def main():
 		print('The input file does not exist.')
 		return
 
+	if os.path.isdir(tempdir):
+		shutil.rmtree(tempdir)
+	os.mkdir(tempdir)
+	
 	# Convert the input file to WAV if necessary
 	input_file = check_and_convert_to_wav(input_file)
 
@@ -164,10 +188,7 @@ def main():
 	occurrences = args.occurrences
 	time_window = timedelta(minutes=args.time_window)
 
-	# Create a temporary directory to store the output segments
-	with tempfile.TemporaryDirectory(prefix='output_') as output_dir:
-		# Call the process_wav_data function
-		process_wav_data(input_file, output_dir, segment_duration, skip_duration, occurrences, time_window)
+	process_wav_data(input_file, tempdir, segment_duration, skip_duration, occurrences, time_window)
 
 if __name__ == '__main__':
 	main()
