@@ -1,5 +1,7 @@
 
 # music-scripts
+
+## TODO update this
 my python scripts for downloading, encoding and checking music
 
 these tools must be in in your path: ffmpeg-normalize, yt-dlp, ffmpeg, songrec

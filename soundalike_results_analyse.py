@@ -33,7 +33,7 @@ def analyze_groups(groups, percentage):
 
 def main():
     parser = argparse.ArgumentParser(description='Analyze and compare file information.')
-    parser.add_argument('input_file', help='Path to the output file of soundalike')
+    parser.add_argument('input_file', help='Path to the output file of soundalike.\nFor example: soundalike . >> soundalike_out.txt')
     parser.add_argument('--percentage', type=float, default=5, help='Percentage for comparison (default: 5)')
 
     args = parser.parse_args()
