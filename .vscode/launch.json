@@ -5,12 +5,28 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Debug folder_cutoff",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "folder_cutoff.py",
+            "console": "integratedTerminal",
+            "args": "2024_06_07"
+        },
+        {
             "name": "Python Debugger: Current File with Arguments",
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "args": "--url 'https://music.youtube.com/playlist?list=PLN_vS3zireLAT3AqLmTCymjdKt5skjLKJ'"
+            "args": "${command:pickArgs}"
+        },
+        {
+            "name": "Debug downloader",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "downloader.py",
+            "console": "integratedTerminal",
+            "args": "--url 'https://music.youtube.com/playlist?list=PLN_vS3zireLAT3AqLmTCymjdKt5skjLKJ' --target-lufs=-10"
         }
     ]
 }

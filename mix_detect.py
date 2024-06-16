@@ -10,8 +10,10 @@ import sys
 import shutil
 from time import sleep
 
-tempdir = os.path.join(tempfile.gettempdir(), "mixdetect_temp")
+from utils import *
 
+TEMP_DIR = os.path.join(tempfile.gettempdir(), "mixdetect_temp")
+DEBUG = False
 
 class Result:
 	def __init__(self, title, segment_name):
@@ -30,26 +32,17 @@ class Result:
 		return f'{self.title} @ {self.timestamp}'
 
 def check_and_convert_to_wav(input_file):
-	# Check if the input file is already in WAV format
 	if input_file.lower().endswith('.wav'):
 		return input_file
 
-	# Create a temporary directory to store the converted WAV file
-	#temp_dir = tempfile.mkdtemp(prefix='tmp_')
+	if os.path.isdir(TEMP_DIR):
+		shutil.rmtree(TEMP_DIR)
+	os.mkdir(TEMP_DIR)
 
-	# Generate the output WAV file path
-	output_wav_file = os.path.join(tempdir, 'converted.wav')
-
-	# Use FFmpeg to convert the input file to WAV format
-	print(f"Converting to {output_wav_file}...")
+	logging.info("converting to wav...")
+	output_wav_file = os.path.join(TEMP_DIR, 'converted.wav')
 	command = f'ffmpeg -i "{input_file}" -hide_banner -loglevel panic "{output_wav_file}"'
-	print(f"running command {command}")
-	subprocess.run(command, shell=True)
-	if not os.path.isfile(output_wav_file):
-		raise Exception("Failed to convert wav")
-	print("Converted to WAV")
-
-
+	run_command(command)
 	return output_wav_file
 
 def get_segment_name(segment_index, segment_duration, skip_duration):
@@ -78,7 +71,7 @@ def print_summary(results, occurrences, time_window):
 	print("----------")
 
 def process_wav_data(input_file, output_dir, segment_duration, skip_duration, occurrences, time_window):
-	# Open the input WAV file
+	logging.info("processing...")
 	with wave.open(input_file, 'rb') as wav_file:
 		# Get the parameters of the input file
 		num_channels = wav_file.getnchannels()
@@ -89,9 +82,6 @@ def process_wav_data(input_file, output_dir, segment_duration, skip_duration, oc
 		# Calculate the number of frames for the segment and skip durations
 		segment_frames = int(segment_duration * frame_rate)
 		skip_frames = int(skip_duration * frame_rate)
-
-		# Create the output directory if it doesn't exist
-		#os.makedirs(output_dir, exist_ok=True)
 
 		# Split the WAV file into segments
 		segment_count = 0
@@ -120,27 +110,20 @@ def process_wav_data(input_file, output_dir, segment_duration, skip_duration, oc
 				output_wav.writeframes(frames)
 
 			if not os.path.isfile(output_file):	
-				raise Exception(f"Failed to create segment {output_file}")
-			#try:
+				logging.error(f"Failed to create segment {output_file}")
+				sys.exit(1)
+
 			result = None
-			#try:
-			print(output_file)
-			sleep(3)
-			command = f'songrec audio-file-to-recognized-song "{output_file}"'
-			result = subprocess.check_output(command, shell=True).decode().strip()
-			#except Exception as e:
-			#	print(f"{e} happened, resuming...")
+			logging.info(segment_name)
+			#sleep(3) # weird outputs from songrec ?
+			result = run_command(f'songrec audio-file-to-recognized-song "{output_file}"')
 
-			#if result == None:
-			#	continue
-
-			# Process the songrec output
 			result_data = json.loads(result)
 			if "track" in result_data:
 				title = result_data["track"]["subtitle"] + ' - ' + result_data["track"]["title"]
 				result_obj = Result(title, segment_name)
 				allResults.append(result_obj)
-				print(result_obj)
+				logging.info(f"found {result_obj}")
 
 			segment_count += 1
 			start_frame += segment_frames + skip_frames
@@ -148,47 +131,31 @@ def process_wav_data(input_file, output_dir, segment_duration, skip_duration, oc
 		print_summary(allResults, occurrences, time_window)
 
 def main():
-	# Create an argument parser
-	parser = argparse.ArgumentParser(description='Detects the track IDs from a DJ mix using SongRec (Shazam). SongRec should be in PATH!')
+	global DEBUG
 
-	# Add the input file path argument
+	# parse arguments
+	parser = argparse.ArgumentParser(description='Detects the track IDs from a DJ mix using SongRec (Shazam)')
 	parser.add_argument('input_file', type=str, help='path to the input file')
-
-	# Add optional arguments for segment duration, skip duration, occurrences, time window, and output directory
-	parser.add_argument('--segment-duration', type=float, default=15,
-						help='duration of each segment in seconds (default: 15)')
-	parser.add_argument('--skip-duration', type=float, default=15,
-						help='duration to skip between segments in seconds (default: 15)')
-	parser.add_argument('--occurrences', type=int, default=2,
-						help='minimum number of occurrences for a result to be printed (default: 2)')
-	parser.add_argument('--time-window', type=int, default=5,
-						help='time window in minutes to consider for occurrences (default: 5)')
-
-	# Parse the command-line arguments
+	parser.add_argument('--segment-duration', type=float, default=15, help='duration of each segment in seconds (default: 15)')
+	parser.add_argument('--skip-duration', type=float, default=15, help='duration to skip between segments in seconds (default: 15)')
+	parser.add_argument('--occurrences', type=int, default=2, help='minimum number of occurrences for a result to be printed (default: 2)')
+	parser.add_argument('--time-window', type=int, default=5, help='time window in minutes to consider for occurrences (default: 5)')
+	parser.add_argument('--debug', action='store_true', help=f'Enabled debug mode.')
 	args = parser.parse_args()
-
-	# Extract the input file path from the arguments
-	input_file = args.input_file
-
-	# Check if the input file exists
-	if not os.path.isfile(input_file):
-		print('The input file does not exist.')
-		return
-
-	if os.path.isdir(tempdir):
-		shutil.rmtree(tempdir)
-	os.mkdir(tempdir)
 	
-	# Convert the input file to WAV if necessary
-	input_file = check_and_convert_to_wav(input_file)
+	# init
+	DEBUG = args.debug
+	setup_logging(DEBUG)
 
-	# Extract the segment duration, skip duration, occurrences, and time window from the arguments
-	segment_duration = args.segment_duration
-	skip_duration = args.skip_duration
-	occurrences = args.occurrences
+	# validate input
+	if not os.path.isfile(args.input_file):
+		logging.error('The input file does not exist.')
+		sys.exit(1)
+
+	# run it
+	input_file = check_and_convert_to_wav(args.input_file)
 	time_window = timedelta(minutes=args.time_window)
-
-	process_wav_data(input_file, tempdir, segment_duration, skip_duration, occurrences, time_window)
+	process_wav_data(input_file, TEMP_DIR, args.segment_duration, args.skip_duration, args.occurrences, time_window)
 
 if __name__ == '__main__':
 	main()

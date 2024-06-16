@@ -2,34 +2,20 @@ from scipy.fft import fft
 from scipy.io import wavfile
 import argparse
 import concurrent.futures
-import fnmatch
-import hashlib
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import shutil
-import subprocess
 import sys
 import tempfile
-import traceback
-import argparse
 
+from utils import *
 matplotlib.use('agg') # hacky fix: https://stackoverflow.com/a/74471578
 
-processed = 0
-filecount = 0
-debug = False
-temp_dir = tempfile.mkdtemp()
-
-def log(msg): 
-	# dirty hack so we can redirect the output and tail -f the file
-	print(msg, flush=True)
-
-def run_command(command):
-	# Execute a shell command and return the output as a string
-	sub_process = subprocess.check_output(command, shell=True)
-	return str(sub_process.decode('utf-8'))
+# globals
+TEMP_DIR = tempfile.mkdtemp()
+DEBUG = False
 
 def get_average_by_hertz_range(data_set, wanted_hz_beginning, wanted_hz_end, samples_per_hz):
 	# Calculate the average of a range of Hz values in a dataset
@@ -46,9 +32,7 @@ def get_song_data(samp_freq, snd):
 	time_array = time_array * 1000
 	return time_array, channel
 
-
 def get_cutoff(file_name, min_search_hz, hz_step, duration, downsample_size, original_filename):
-	global processed
 	# Calculate the cutoff frequency of a sound file
 	samp_freq, snd = wavfile.read(file_name)
 
@@ -93,141 +77,117 @@ def get_cutoff(file_name, min_search_hz, hz_step, duration, downsample_size, ori
 		# Get the x-value at the index of the maximum slope
 		x_max_slope = plotHzs_downsampled[index_max_slope]
 	except Exception as e:
-		print(f'[{original_filename}]error while doing math: {e}')
-		return 0
+		logging.error(f'[{original_filename}] error while doing math: {e}')
+		sys.exit(1)
 
-	processed += 1
-
-	if debug:
+	if DEBUG:
 		plt.close()
-
 		plt.plot(plotHzs, plotDbs, color="blue")
 		plt.plot(plotHzs_downsampled, plotDbs_downsampled, color='r', linewidth=2)
 		plt.xlabel('Frequency (Hz)')
 		plt.ylabel('Power (dB)')
 		plt.axvline(x=x_max_slope, color='g')
 		plt.text(0, 0, os.path.basename(original_filename), fontsize=10)
-
-		plt.savefig(temp_dir + '/last_plot.png')
+		plt.savefig(TEMP_DIR + '/last_plot.png')
 		plt.show()
-#	plt.close()
-	return x_max_slope
 
+	return x_max_slope
 
 def smooth_spectrum(spectrum, window_size=11):
 	window = np.hanning(window_size)
 	smoothed = np.convolve(spectrum, window, mode='same') / sum(window)
 	return smoothed
 
-def get_file_hash(filename):
-	# Calculate the MD5 hash of a file's name
-	return hashlib.md5(filename.encode('utf-8')).hexdigest()
-
-def is_audio_format(ext):
-	# Check if a file extension corresponds to an audio format
-	extensions = ['flac', 'alac', 'wav', 'aif', 'mp3', 'aac', 'm4a', 'webm', 'opus', 'ogg']
-	ext = ext.replace(".", "")
-	if ext in extensions:
-		return True
-	else:
-		return False
-
-def extract_files(directory, pattern):
-	# Recursively extract files from a directory based on a pattern
-	for root, dirs, files in os.walk(directory):
-		for basename in files:
-			if fnmatch.fnmatch(basename, pattern):
-				file_name = os.path.join(root, basename)
-				yield file_name
-
 def process(file_name, args):
-	cutoff = None
+	original_file_name = file_name
 	file_format = os.path.splitext(file_name)[1]
+	wasnt_wav = None
 
+	# convert if needed & get cutoff value
 	if file_format != ".wav":
-		temp_file_name = os.path.join(temp_dir, get_file_hash(file_name) + '.wav')
+		temp_file_name = os.path.join(TEMP_DIR, get_file_hash(file_name) + '.wav')
 		run_command(f'ffmpeg -y -nostats -loglevel panic -hide_banner -i "{file_name}" "{temp_file_name}"')
-		cutoff = get_cutoff(temp_file_name, args.min_search_hz, args.hz_step, args.duration, args.downsample_size, file_name)
+		file_name = temp_file_name
+		wasnt_wav = True
+
+	cutoff = get_cutoff(temp_file_name, args.min_search_hz, args.hz_step, args.duration, args.downsample_size, file_name)
+
+	if wasnt_wav == True:
 		os.remove(temp_file_name)
-	else:
-		cutoff = get_cutoff(file_name, args.min_search_hz, args.hz_step, args.duration, args.downsample_size, file_name)
+		
+	mark = "✓" if cutoff >= args.accepted_hz else "✕"
+	mark = f" {mark} "
+	logging.info(f"{mark} {original_file_name} : {cutoff}")
+	
+	if args.action == "delete":
+		logging.warning(f"deleting {original_file_name}")
+		os.remove(original_file_name)
 
-#	print(args.delete)
-
-	if cutoff >= args.accepted_hz:
-		log(f"    [{processed}/{filecount}] - '{file_name}': {cutoff}")
-	else:
-		log(f"!!! [{processed}/{filecount}] - '{file_name}': {cutoff}")
-
-		if args.delete and cutoff != 0:
-			os.remove(file_name)
-			print(f"deleting {file_name}")
-		plt.figure(facecolor='red')
-
-	if args.rename and cutoff < args.accepted_hz:
-		if '!' not in os.path.splitext(os.path.basename(file_name))[0]:
-			new_file_name = os.path.dirname(file_name) + '/!' + os.path.splitext(os.path.basename(file_name))[0] + '_' + str(round(cutoff / 1000)) + "k" + file_format
-			shutil.move(file_name, new_file_name)
-			log(f"Renamed '{file_name}' to '{new_file_name}'")
-		else:
-			log(f'skipping rename: {file_name}')
-
+	if args.action == "rename":
+		if cutoff <= args.accepted_hz:
+			if '!' not in os.path.splitext(os.path.basename(original_file_name))[0]:
+				new_file_name = os.path.dirname(original_file_name) + '/!' + os.path.splitext(os.path.basename(original_file_name))[0] + '_' + str(round(cutoff / 1000)) + "k" + file_format
+				shutil.move(original_file_name, new_file_name)
+				#logging.info(f"Renamed '{original_file_name}' to '{new_file_name}'")
+			else:
+				logging.warning(f'skipping rename: {original_file_name}, seems to be already renamed')
 
 def main():
-	global filecount, debug
-
-	parser = argparse.ArgumentParser(description="Detect the cutoff frequency of audio files in a given directory.")
-
+	global DEBUG
+	# handle arguments
+	parser = argparse.ArgumentParser(description="Analyse music files' quality in a given folder.")
 	default_min_search_hz = 10000
 	default_accepted_hz = 19500
+	default_hz_step = 100
+	default_duration = 60
+	default_downsample_size = 200
+	default_action = "rename"
 	parser.add_argument('folder', help='The folder to search for audio files in')
 	parser.add_argument('--min-search-hz', type=int, default=default_min_search_hz, help=f'Start the search from this frequency. (Default: {default_min_search_hz})')
 	parser.add_argument('--accepted-hz', type=int, default=default_accepted_hz, help=f'The accepted cutoff frequency. We will accept these files and not throw warnings. (Default: {default_accepted_hz})')
-	parser.add_argument('--hz-step', type=int, default=100, help='The step size for frequency search')
-	parser.add_argument('--duration', type=int, default=60, help='Duration of the portion of the song to analyze in seconds (from the middle of the song)')
-	parser.add_argument('--downsample-size', type=int, default=200, help='Size to use while downsampling')
-	parser.add_argument('--debug', default=False, type=bool, help='Set to true for debug prints and graphs')
-	parser.add_argument('--skip', type=int, default=0, help='Number of files to skip (useful when recovering from a crashed run)')
-	parser.add_argument('--rename', default=False, type=bool, help='Rename files under the specified frequency? Filenames containing "!" will be skipped (Default: false)')
-	parser.add_argument('--delete', default=False, type=bool, help='Delete invalid files? (Default: false)')
-
+	parser.add_argument('--hz-step', type=int, default=default_hz_step, help=f'The step size for frequency search (Default: {default_hz_step})')
+	parser.add_argument('--duration', type=int, default=default_duration, help=f'Duration of the portion of the song to analyze in seconds (from the middle of the song) (Default: {default_duration})')
+	parser.add_argument('--downsample-size', type=int, default=default_downsample_size, help=f'Size to use while downsampling (Default: {default_downsample_size})')
+	parser.add_argument('--action', default=default_action, type=str, help=f'Action to do on the misbehaving song. Actions: nothing, rename or delete. (Default: {default_action})')
+	parser.add_argument('--debug', action='store_true', help=f'Debug prints and graphs')
 	args = parser.parse_args()
 
-	if args.delete:
-		print("WARNING: Deleting is enabled!")
+	# init
+	check_dependencies("ffmpeg")
+	DEBUG = args.debug
+	setup_logging(DEBUG)
+	
+	# process user input
+	if args.action == "delete":
+		logging.warning("Files will be DELETED!")
 
-	debug = args.debug
+	if not os.path.isdir(args.folder):
+		logging.error("given folder not found!")
+		sys.exit(1)
 
+	if args.action not in ["nothing", "rename", "delete"]:
+		logging.error("invalid action given in arguments!")
+		sys.exit(1)
+
+	# get files
 	file_list = []
-
-	for file_name in extract_files(args.folder, '*'):
-		file_format = os.path.splitext(file_name)[1]
-		if is_audio_format(file_format):
-			file_list.append(file_name)
-		else:
-			log(f"Skipping file {file_name}, as it is not an audio file.")
-			continue
-
+	for file in get_files_recursive(args.folder):
+		file_format = os.path.splitext(file)[1]
+		if is_audio_format(file):
+			file_list.append(file)
 	file_list.sort()
+	logging.info(f"found {len(file_list)} audio files")
 
-	if args.skip > 0:
-		print(f'Warning!!! Skipping {args.skip } files')
-		file_list = file_list[args.skip:]
-
-	filecount = len(file_list)
-	log(f'Found {filecount} audio files in the directory')
-
-#	for f in file_list:
-#		process(f, args)
-
-	with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+	# start multithreaded work
+	cpu_count = get_thread_count(DEBUG)
+	with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count) as executor:
 		futures = []
 		for f in file_list:
 			future = executor.submit(process, f, args)
 			futures.append(future)
-
-		# Wait for all tasks to complete
-		concurrent.futures.wait(futures)
+		concurrent.futures.wait(futures) # wait for all tasks to complete
+	os.removedirs(TEMP_DIR)
+	logging.info("done, bye")
 
 if __name__ == '__main__':
 	main()
