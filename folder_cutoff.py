@@ -4,6 +4,7 @@ import argparse
 import concurrent.futures
 import fnmatch
 import hashlib
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -13,6 +14,8 @@ import sys
 import tempfile
 import traceback
 import argparse
+
+matplotlib.use('agg') # hacky fix: https://stackoverflow.com/a/74471578
 
 processed = 0
 filecount = 0
@@ -93,12 +96,7 @@ def get_cutoff(file_name, min_search_hz, hz_step, duration, downsample_size, ori
 		print(f'[{original_filename}]error while doing math: {e}')
 		return 0
 
-
 	processed += 1
-
-
-
-
 
 	if debug:
 		plt.close()
@@ -112,10 +110,7 @@ def get_cutoff(file_name, min_search_hz, hz_step, duration, downsample_size, ori
 
 		plt.savefig(temp_dir + '/last_plot.png')
 		plt.show()
-
 #	plt.close()
-
-
 	return x_max_slope
 
 
@@ -159,7 +154,6 @@ def process(file_name, args):
 
 #	print(args.delete)
 
-
 	if cutoff >= args.accepted_hz:
 		log(f"    [{processed}/{filecount}] - '{file_name}': {cutoff}")
 	else:
@@ -179,24 +173,22 @@ def process(file_name, args):
 			log(f'skipping rename: {file_name}')
 
 
-
-
-
-
 def main():
 	global filecount, debug
 
 	parser = argparse.ArgumentParser(description="Detect the cutoff frequency of audio files in a given directory.")
 
+	default_min_search_hz = 10000
+	default_accepted_hz = 19500
 	parser.add_argument('folder', help='The folder to search for audio files in')
-	parser.add_argument('--min-search-hz', type=int, default=10000, help='Start the search from this frequency.')
-	parser.add_argument('--accepted-hz', type=int, default=19500, help='The accepted cutoff frequency. We will accept these files and not throw warnings.')
+	parser.add_argument('--min-search-hz', type=int, default=default_min_search_hz, help=f'Start the search from this frequency. (Default: {default_min_search_hz})')
+	parser.add_argument('--accepted-hz', type=int, default=default_accepted_hz, help=f'The accepted cutoff frequency. We will accept these files and not throw warnings. (Default: {default_accepted_hz})')
 	parser.add_argument('--hz-step', type=int, default=100, help='The step size for frequency search')
 	parser.add_argument('--duration', type=int, default=60, help='Duration of the portion of the song to analyze in seconds (from the middle of the song)')
 	parser.add_argument('--downsample-size', type=int, default=200, help='Size to use while downsampling')
 	parser.add_argument('--debug', default=False, type=bool, help='Set to true for debug prints and graphs')
 	parser.add_argument('--skip', type=int, default=0, help='Number of files to skip (useful when recovering from a crashed run)')
-	parser.add_argument('--rename', default=False, type=bool, help='Rename files under the specified frequency? (Default: false)')
+	parser.add_argument('--rename', default=False, type=bool, help='Rename files under the specified frequency? Filenames containing "!" will be skipped (Default: false)')
 	parser.add_argument('--delete', default=False, type=bool, help='Delete invalid files? (Default: false)')
 
 	args = parser.parse_args()
