@@ -1,24 +1,39 @@
 
 # music-scripts
+<u>my scripts for downloading, encoding and checking music</u>
 
-## TODO update this
-my python scripts for downloading, encoding and checking music
+- [music-scripts](#music-scripts)
+    - [requirements](#requirements)
+    - [scripts](#scripts)
+    - [other interesting tools](#other-interesting-tools)
+    - [thanks to](#thanks-to)
 
-these tools must be in in your path: ffmpeg-normalize, yt-dlp, ffmpeg, songrec
 
-- downloader.py: downloads a youtube playlist and normalizes the output files
-- folder_normalizer.py: normalizes the files' loudness in a given folder
-- folder_cutoff.py: analyses a folder full of music files and prints their cutoff frequency. it is mainly used to determine the files' quality
-- mix_plot_bpm.py: draws the input file's BPM onto a graph
-- mix_detect.py: loops trough a long audio file and recognizes songs using the shazam api 
-- rb_mix_converter.py: converts every wav file in a given folder to mp3
-- ytmusic_batch_search.py: searches and returnes a YT Music link for every line in a given file
+>please also note that the scripts & calculations are not perfect but they are good enough for me
 
-please also note that the scripts & calculations are not perfect but they are good enough for me
+### requirements
 
-also check out this great project to filter out duplicated music: https://codeberg.org/derat/soundalike
+these tools must be in in your path:
+- yt-dlp
+- ffmpeg
+- songrec
 
-big thanks to:
+### scripts
+
+- **downloader.py**: downloads a list of videos from youtube (either from a playlist or a .txt file), normalizes and converts them
+- <strike>**folder_normalizer.py**:</strike> needs to be rewritten
+- **folder_cutoff.py**: analyses a folder full of music and prints their cutoff frequency. it is mainly used to determine the files' quality, but can be also used to rename them accordingly
+- **mix_plot_bpm.py**: draws the input mix file's BPM onto a graph, useful for viewing the DJ set's tempo over time
+- **mix_detect.py**: loops trough a long audio file and recognizes the songs in it using the <code>songrec</code> tool (Shazam API) 
+- **rb_mix_converter.py**: converts every wav file in a given folder to MP3 based on the file date tags, mainly used via <code>rekordbox</code>
+- **ytmusic_batch_search.py**: searches and returnes a YT Music link for every line in a given file
+
+
+### other interesting tools
+- <https://codeberg.org/derat/soundalike>: great tool for de-duplicating your music library
+- <https://github.com/slhck/ffmpeg-normalize>:  cool wrapper for ffmpeg
+  
+### thanks to
 - https://github.com/yt-dlp/yt-dlp
 - https://github.com/marin-m/SongRec
 - https://github.com/noahgolmant/py-audio-analysis 

@@ -56,6 +56,8 @@ def checkFile(filename, args):
 			runNormalization(filename, args.target_db)
 
 def main():
+	print("TODO: dont use this, this needs to be reworked, linear gaining may fail and compromise the audio quality")
+	return
 	parser = argparse.ArgumentParser(description='Audio file normalization')
 	parser.add_argument('folder', help='Input folder path')
 	parser.add_argument('--target-db', type=float, default=-9.5, help='Target loudness level in LUFS (default: -9.5)')
